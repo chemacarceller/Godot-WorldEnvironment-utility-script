@@ -1,84 +1,168 @@
-# Este codigo simplemente es un script que debe ajuntarse a un nodo WorldEnvironment
-# para que la calidad del environment se ajuste a la memoria VRAM disponible
+# This code is simply a script that must be attached to a WorldEnvironment node
+# to match the quality of the environment to the available VRAM memory
 extends WorldEnvironment
 
-# Debe contener el nombre de una variable booleana de GameInstance inicialmente puesta a false para que únicamente este proceso se cargue una única evz preferiblemente en el proceso de carga del juego
+# Name of the unique GameInstance variable for THIS environment
 @export var controlVar: String = ""
 
-# Función que nos proporciona la cantidad de memoria VRAM disponible a través de una llamada al SO
-func get_vram_real_mb() -> float :
-	
-	var os_name = OS.get_name()
-	var output = []
-
-	if os_name == "Windows" :
-		# Execute a quick native command to extract the exact dedicated memory of the active GPU
-		OS.execute("powershell", ["-Command", "(Get-CimInstance Win32_VideoController | Select-Object -First 1).AdapterRAM"], output)
-		if output.size() > 0 and str(output[0]).strip_edges().is_valid_int():
-			var bytes = str(output[0]).strip_edges().to_int()
-			return bytes / 1024.0 / 1024.0
-
-	elif os_name == "Linux":
-		# Try reading native Nvidia systems
-		OS.execute("nvidia-smi", ["--query-gpu=memory.total", "--format=csv,noheader,nounits"], output)
-		if output.size() > 0 and str(output[0]).strip_edges().is_valid_int():
-			return str(output[0]).strip_edges().to_int()
-	
-	# Returns 512 for safety in case the amount of available VRAM cannot be determined
-	return 512
-
-func _init() -> void:
-	pass
+func _init() -> void : pass
 
 func _ready() -> void :
 
 	if controlVar == "" : return
 
-	# Si la variable es true no se lleva a cabo el proceso
-	if not GameInstance.get(controlVar) : GameInstance.set(controlVar, true)
-	else : return
+	# -------------------------------------------------------------------------
+	# BLOCK A: VIEWPORT AND GLOBAL DETECTION (Controlled within gpu_data)
+	# -------------------------------------------------------------------------
 
-	if not environment : return
+	# In GameInstance we must have a structure like this:
 
-	var vram_gb : float = get_vram_real_mb()
-	var device_type : int = RenderingServer.get_video_adapter_type()
+	# Unified Data Structure for Hardware and Video Status
+	# var gpu_data : Dictionary = {
+	#	 "vp_detectada": false,         # Checks if the Viewport/Hardware has already been processed
+	#	 "vram": 512.0 / 1024.0,        # Secure default value in Gigabytes
+	#	 "type": 0                      # Device Type (Dedicated, Integrated, etc.)
+	# }
 
-	# 1. GODOT 4.7+ FUTURE: DOES IT SUPPORT HARDWARE RAY TRACING?
-	# We use 'has_method' for safety so that it doesn't cause an error in your current build 4.6
-	if RenderingServer.has_method("is_ray_tracing_supported") and RenderingServer.call("is_ray_tracing_supported") :
-		environment.sdfgi_enabled = false 
-		# Here you would activate the RT Hardware options of 4.7, not yet done
-		MyLogger.info("[Render] 4.7+ Detectado: Usando Ray Tracing por Hardware. SDFGI: OFF", 'world_environment.gd',38,true)
-		return
+	if not GameInstance.gpu_data["vp_detectada"] :
 
-	# 2. LOGIC FOR GODOT 4.6 (SDFGI BY SOFTWARE)
+		# We save the hardware data directly in the structure
+		# VRAM is saved in GB measure
+		GameInstance.gpu_data["vram"] = _get_vram_real_mb() / 1024.0
+		GameInstance.gpu_data["type"] = RenderingServer.get_video_adapter_type()
+		
+		# We configure the screen by passing the complete structure
+		_configure_viewport_global(GameInstance.gpu_data)
+		
+		# We mark the Viewport as initialized directly in the structure
+		GameInstance.gpu_data["vp_detectada"] = true
+
+	# -------------------------------------------------------------------------
+	# BLOCK B: LOCAL ENVIRONMENT (Executed for each new map only once)
+	# -------------------------------------------------------------------------
+
+	# The exported controlVar variable will have a variable name that will exist in GameInstance and will be assigned false as the default value
+	var already_configured_env : bool = GameInstance.get(controlVar)
 	
-	# A. INTEGRATED FILTER/CRITICAL VRAM
-	if device_type == RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU and vram_gb <= 2048.0 or not device_type :
-		environment.sdfgi_enabled = false
-		MyLogger.info("[Render] Integrada o VRAM baja. SDFGI: OFF " + str(vram_gb) + " - " + str(device_type), 'world_environment.gd',46,true)
-		return
+	# If this specific environment has already been processed in the past, we leave immediately
+	if already_configured_env: return
 
-	# B. VRAM LEVEL CONFIGURATION
-	if (device_type != RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU and vram_gb <= 4608.0) or (device_type == RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU and vram_gb > 2048.0) :
-		#RTX 3050 Laptop/GTX 1650 (4GB)
-		environment.sdfgi_enabled = true
-		environment.sdfgi_cascades = 4
-		environment.sdfgi_use_occlusion = false
-		environment.sdfgi_y_scale = Environment.SDFGI_Y_SCALE_75_PERCENT
-		MyLogger.info("[Render] SDFGI Optimizado (VRAM <= 4GB) " + str(vram_gb) + " - " + str(device_type), 'world_environment.gd',56,true)
+	# We apply the local parameters by consuming the data of the structure without recalculating anything
+	_configure_local_environment(GameInstance.gpu_data)
+	
+	# We mark this map as persistently configured in Autoload
+	GameInstance.set(controlVar, true)
 
-	elif device_type != RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU and vram_gb <= 8704.0:
-		# RTX 4060 / RX 6600 (8GB) – Balance
-		environment.sdfgi_enabled = true
-		environment.sdfgi_cascades = 4
-		environment.sdfgi_use_occlusion = true 
-		environment.sdfgi_y_scale = Environment.SDFGI_Y_SCALE_100_PERCENT
-		MyLogger.info("[Render] SDFGI Medio (VRAM 6GB-8GB) " + str(vram_gb) + " - " + str(device_type), 'world_environment.gd',56,true)
 
-	else:
-		# GTX 1080 Ti / RTX 3060 12GB / RTX 4070+ (10GB+)
-		environment.sdfgi_enabled = true
-		environment.sdfgi_cascades = 6
-		environment.sdfgi_use_occlusion = true
-		MyLogger.info("[Render] SDFGI Full (VRAM > 8GB) " + str(vram_gb) + " - " + str(device_type), 'world_environment.gd',71,true)
+
+
+func _configure_viewport_global(gpu: Dictionary) -> void :
+
+	# The Viewport is the window or region of the screen that is responsible for rendering and displaying your scene
+	# The ViewPort configuration affects the last step of the rendering pipeline once we have the pixel mesh
+	var vp = get_viewport()
+
+	# We check if the Viewport has already been configured in the unified dictionary
+	if not vp: return
+	
+	# Use this to avoid crashes if the dictionary is incomplete :
+	var vram: float = float(gpu.get("vram", 0.0))
+	var type: int = int(gpu.get("type", RenderingDevice.DEVICE_TYPE_OTHER))
+	
+	# If the card is integrated or has less than 2.5 GB
+	if (type == RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU or vram <= 2.5) :
+		ConfigRender.apply_graphics_profile(ConfigRender.Profile.LOW, vp, null)
+
+	# If the card is dedicated with less than 4.5 GB
+	elif (type != RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU and vram <=4.5) :
+		ConfigRender.apply_graphics_profile(ConfigRender.Profile.MEDIUM, vp, null)
+
+	# if the card is dedicated with less than 8.5 GB
+	elif (type != RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU and vram <= 8.5) :
+		ConfigRender.apply_graphics_profile(ConfigRender.Profile.HIGH, vp, null)
+
+	# if the card is dedicated with more than 8.5 GB
+	else :
+		ConfigRender.apply_graphics_profile(ConfigRender.Profile.ULTRA, vp, null)
+
+
+
+func _configure_local_environment(gpu: Dictionary) -> void :
+
+	# If the native property does not exist, we leave
+	if not environment: return
+
+	# We get the data from the gpu object
+	var vram = gpu["vram"]
+	var type = gpu["type"]
+
+	# If the card is integrated or has less than 2.5 GB
+	if (type == RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU or vram <= 2.5) :
+		ConfigRender.apply_graphics_profile(ConfigRender.Profile.LOW, null, environment)
+
+	# If the card is dedicated with less than 4.5 GB
+	elif (type != RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU and vram <= 4.5) :
+		ConfigRender.apply_graphics_profile(ConfigRender.Profile.MEDIUM, null, environment)
+
+	# if the card is dedicated with less than 8.5 GB
+	elif (type != RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU and vram <= 8.5) :
+		ConfigRender.apply_graphics_profile(ConfigRender.Profile.HIGH, null, environment)
+
+	# if the card is dedicated with more than 8.5 GB
+	else :
+		ConfigRender.apply_graphics_profile(ConfigRender.Profile.ULTRA, null, environment)
+
+
+
+func _get_vram_real_mb() -> float :
+
+	var os_name = OS.get_name()
+	var output = []
+
+	if os_name == "Windows" :
+
+		# Runs PowerShell synchronously to detect which graphics card has the most memory
+		OS.execute("powershell", [ "-Command", "(Get-ItemProperty -Path 'HKLM:/SYSTEM/ControlSet001/Control/Class/{4d36e968-e325-11ce-bfc1-08002be10318}/*' -ErrorAction SilentlyContinue | Where-Object { $_.'HardwareInformation.qwMemorySize' } | Sort-Object -Property 'HardwareInformation.qwMemorySize' -Descending | Select-Object -First 1).'HardwareInformation.qwMemorySize'" ], output)
+
+		# Output is an array, the data comes in position 0
+		if output.size() > 0 :
+			if output[0].strip_edges().is_valid_int() :
+				return output[0].strip_edges().to_int() / 1024.0 / 1024.0
+
+	elif os_name == "Linux" :
+
+		# 1. Try via nvidia-smi
+		OS.execute("nvidia-smi", ["--query-gpu=memory.total", "--format=csv,noheader,nounits"], output)
+
+		if output.size() > 0 :
+			if output[0].strip_edges().is_valid_int() :
+				return output[0].strip_edges().to_int()
+
+		# CLEANUP: Empty the array in case nvidia-smi left error text,
+		# avoiding dragging junk if you use 'output' further down in the script.
+		output.clear()
+
+		# 2. Try via sysfs (We look for the one with the most VRAM to avoid integrated)
+		var max_vram_found = 0.0
+
+		for card_index in ["card0", "card1", "card2"] :
+
+			var vram_path = "/sys/class/drm/" + card_index + "/device/mem_info_vram_total"
+
+			if FileAccess.file_exists(vram_path) :
+
+				var file = FileAccess.open(vram_path, FileAccess.READ)
+
+				if file :
+
+					var bytes_text = file.get_as_text().strip_edges()
+					file.close()
+
+					if bytes_text.is_valid_int() :
+						var vram_mb = bytes_text.to_int() / 1024.0 / 1024.0
+						if vram_mb > max_vram_found : max_vram_found = vram_mb
+
+		if max_vram_found > 0.0 : return max_vram_found
+
+	# Default if all else fails or the platform is not supported (macOS, Android, Web, etc.)
+	return 512.0

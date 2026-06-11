@@ -9,8 +9,6 @@ func _init() -> void : pass
 
 func _ready() -> void :
 
-	if controlVar == "" : return
-
 	# -------------------------------------------------------------------------
 	# BLOCK A: VIEWPORT AND GLOBAL DETECTION (Controlled within gpu_data)
 	# -------------------------------------------------------------------------
@@ -41,17 +39,21 @@ func _ready() -> void :
 	# BLOCK B: LOCAL ENVIRONMENT (Executed for each new map only once)
 	# -------------------------------------------------------------------------
 
-	# The exported controlVar variable will have a variable name that will exist in GameInstance and will be assigned false as the default value
-	var already_configured_env : bool = GameInstance.get(controlVar)
-	
-	# If this specific environment has already been processed in the past, we leave immediately
-	if already_configured_env: return
+	if controlVar != "" :
+
+		# The exported controlVar variable will have a variable name that will exist in GameInstance and will be assigned false as the default value
+		var already_configured_env = GameInstance.get(controlVar)
+
+		# If this specific environment has already been processed in the past, we leave immediately
+		if already_configured_env == true or already_configured_env == null : return
+
+		# We mark this map as persistently configured in Autoload
+		GameInstance.set(controlVar, true)
 
 	# We apply the local parameters by consuming the data of the structure without recalculating anything
 	_configure_local_environment(GameInstance.gpu_data)
 	
-	# We mark this map as persistently configured in Autoload
-	GameInstance.set(controlVar, true)
+
 
 
 
@@ -65,7 +67,7 @@ func _configure_viewport_global(gpu: Dictionary) -> void :
 	# We check if the Viewport has already been configured in the unified dictionary
 	if not vp: return
 	
-	# Use this to avoid crashes if the dictionary is incomplete :
+	# Use this to avoid crashes if the dictionary is incomplete
 	var vram: float = float(gpu.get("vram", 0.0))
 	var type: int = int(gpu.get("type", RenderingDevice.DEVICE_TYPE_OTHER))
 	
@@ -92,9 +94,9 @@ func _configure_local_environment(gpu: Dictionary) -> void :
 	# If the native property does not exist, we leave
 	if not environment: return
 
-	# We get the data from the gpu object
-	var vram = gpu["vram"]
-	var type = gpu["type"]
+	# Use this to avoid crashes if the dictionary is incomplete
+	var vram: float = float(gpu.get("vram", 0.0))
+	var type: int = int(gpu.get("type", RenderingDevice.DEVICE_TYPE_OTHER))
 
 	# If the card is integrated or has less than 2.5 GB
 	if (type == RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU or vram <= 2.5) :
@@ -111,6 +113,8 @@ func _configure_local_environment(gpu: Dictionary) -> void :
 	# if the card is dedicated with more than 8.5 GB
 	else :
 		ConfigRender.apply_graphics_profile(ConfigRender.Profile.ULTRA, null, environment)
+
+
 
 
 

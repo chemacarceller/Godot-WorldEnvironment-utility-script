@@ -7,6 +7,8 @@ enum Profile { LOW, MEDIUM, HIGH, ULTRA }
 
 ## Main method to apply a complete graphic profile
 static func apply_graphics_profile(profile: Profile, vp: Viewport, environment: Environment) -> void:
+
+	# Settings that apply to all profiles when passing the ViewPort
 	if vp : 
 		# Tells Godot to turn off the edge smoothing filter completely based on the final image of the screen
 		# Disabled on all profiles because in no scenario does it offer a real advantage with the settings designed
@@ -25,11 +27,28 @@ static func apply_graphics_profile(profile: Profile, vp: Viewport, environment: 
 		# Antialiasing Temporal (TAA) - TAA is an edge smoothing technique that combines information from previous (past) frames with the current frame.
 		vp.use_taa = false
 
+	# Settings that apply to all profiles when passing the Environment
 	if environment : 
 		# We forget about RayTracing since until the minimum version 4.8 will not be available in the Godot editor
 		# In version 4.7 it will be implemented internally but not usable from the Godot editor
 		# It will be pending to rewrite the script when Hardware Ray Tracing is a reality in Godot
 		# For the time being, SDGGI (Lumen in Unreal Engine) will be used and its study will be deepened
+
+ 		# Global Illumination by Signed Distance Fields (SDFGI)
+		# SDFGI is an advanced 3D graphics technique used in Godot 4 to achieve real-time global illumination
+		# It would be the equivalent of Lumen in Unreal
+		environment.sdfgi_enabled = true
+
+		# Screen Space Ambient Occlusion (SSAO)
+		# SSAO is a post-processing effect that adds realistic shadows in corners, cracks, and points where objects intersect
+		environment.ssao_enabled = true
+
+		# Indirect Screen Space Lighting (SSIL)
+		# SSIL (Screen-Space Indirect Lighting) is responsible for simulating how the colors of a surface are subtly reflected on a nearby one
+		environment.ssil_enabled = true
+
+		# Screen-Space Reflections (SSR)
+		# SSR is a 3D graphics rendering technique used to generate dynamic, real-time reflections on shiny surfaces.
 		environment.ssr_enabled = true
 
 	match profile:
@@ -53,8 +72,9 @@ static func apply_graphics_profile(profile: Profile, vp: Viewport, environment: 
 static func _set_low_profile_vp(vp: Viewport) -> void :
 
 	# Define the scaling and filtering algorithm that is applied to the 3D resolution when rendering at a size smaller or larger than the game window.
-	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
 	vp.scaling_3d_scale = 0.70
+	vp.fsr_sharpness = 0.3
 
 	# Controls the level of Multiple Sampling Anti-Aliasing (MSAA) applied exclusively to the 3D environment
 	vp.msaa_3d = Viewport.MSAA_DISABLED
@@ -75,9 +95,11 @@ static func _set_low_profile_vp(vp: Viewport) -> void :
 	# Configure the Anisotropic Filtering level of textures globally in the engine.
 	# In simple terms: it tells the GPU how sharp and detailed the textures of objects should look when viewed from a very steep angle or lying flat
 	ProjectSettings.set_setting("rendering/textures/default_filters/anisotropic_filtering_level", 4)
+	
+	# Optional: Save the change to the project.godot file
 	ProjectSettings.save() 
 
-	MyLogger.info("[ViewPort] Integrated or low VRAM ", "ConfigRender.gd", 80 , true)
+	MyLogger.info("[ViewPort] Integrated or low VRAM ", "ConfigRender.gd", 102 , true)
 
 
 static func _set_medium_profile_vp(vp: Viewport) -> void :
@@ -85,7 +107,7 @@ static func _set_medium_profile_vp(vp: Viewport) -> void :
 	# Scaling configuration...
 	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
 	vp.scaling_3d_scale = 0.85
-	vp.fsr_sharpness = 0.3
+	vp.fsr_sharpness = 0.15
 
 	vp.msaa_3d = Viewport.MSAA_2X
 
@@ -108,15 +130,17 @@ static func _set_medium_profile_vp(vp: Viewport) -> void :
 	)
 
 	ProjectSettings.set_setting("rendering/textures/default_filters/anisotropic_filtering_level", 8)
-	ProjectSettings.save() # Opcional: guarda el cambio en el archivo project.godot
+	
+	# Optional: Save the change to the project.godot file
+	ProjectSettings.save()
 
-	MyLogger.info("[ViewPort] Medium (VRAM <= 4GB) ", "ConfigRender.gd", 113,true)
+	MyLogger.info("[ViewPort] Medium (VRAM <= 4GB) ", "ConfigRender.gd", 137, true)
 
 
 static func _set_high_profile_vp(vp: Viewport) -> void :
 
-	# No scaling
-	vp.scaling_3d_scale = 1.0
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	vp.scaling_3d_scale = 1.5
 
 	vp.msaa_3d = Viewport.MSAA_2X
 
@@ -135,9 +159,11 @@ static func _set_high_profile_vp(vp: Viewport) -> void :
 	RenderingServer.environment_set_ssil_quality(RenderingServer.ENV_SSIL_QUALITY_MEDIUM, true, 0.5, 2, 50.0, 300.0)
 
 	ProjectSettings.set_setting("rendering/textures/default_filters/anisotropic_filtering_level", 16)
-	ProjectSettings.save() # Opcional: guarda el cambio en el archivo project.godot
+	
+	# Optional: Save the change to the project.godot file
+	ProjectSettings.save()
 
-	MyLogger.info("[ViewPort] High (VRAM 6GB-8GB) ", "ConfigRender.gd", 140, true)
+	MyLogger.info("[ViewPort] High (VRAM 6GB-8GB) ", "ConfigRender.gd", 166, true)
 
 
 static func _set_ultra_profile_vp(vp: Viewport) -> void :
@@ -161,81 +187,89 @@ static func _set_ultra_profile_vp(vp: Viewport) -> void :
 	RenderingServer.environment_set_ssil_quality(RenderingServer.ENV_SSIL_QUALITY_HIGH, false, 0.5, 3, 50.0, 300.0)
 
 	ProjectSettings.set_setting("rendering/textures/default_filters/anisotropic_filtering_level", 16)
-	ProjectSettings.save() # Opcional: guarda el cambio en el archivo project.godot
-
-	MyLogger.info("[ViewPort] Full (VRAM > 8GB) ", "ConfigRender.gd", 166,true)
+	
+	# Optional: Save the change to the project.godot file
+	ProjectSettings.save() 
+	
+	MyLogger.info("[ViewPort] Full (VRAM > 8GB) ", "ConfigRender.gd", 194, true)
 
 
 
 static func _set_low_profile_env(environment: Environment) -> void :
 
-	# Immediately disables Global Illumination by Signed Distance Fields (SDFGI)
+	# Disabling Global Illumination by Signed Distance Fields (SDFGI)
 	environment.sdfgi_enabled = false
 
-	# Immediately disables Screen Space Ambient Occlusion (SSAO)
-	# SSAO is a post-processing effect that adds realistic shadows in corners, cracks, and points where objects intersect
+	# Disabling Screen Space Ambient Occlusion (SSAO)
 	environment.ssao_enabled = false
 
-	# immediately disables Indirect Screen Space Lighting (SSIL)
-	# SSIL (Screen-Space Indirect Lighting) is responsible for simulating how the colors of a surface are subtly reflected on a nearby one
+	# Disabling Indirect Screen Space Lighting (SSIL)
 	environment.ssil_enabled = false
 
-	environment.ssr_max_steps = 32
-	ProjectSettings.set_setting("rendering/reflections/screen_space_reflections/roughness_low_quality", true)
-	environment.ssr_fade_out = 0.5 
+	# Disabling Screen-Space Reflections (SSR)
+	environment.ssr_enabled = false
 
-	MyLogger.info("[Render] Integrated or low VRAM. SDFGI: OFF ", "ConfigRender.gd", 187, true)
+	MyLogger.info("[Render] Integrated or low VRAM. SDFGI: OFF ", "ConfigRender.gd", 212, true)
 
 
 static func _set_medium_profile_env(environment: Environment) -> void :
 
-	#RTX 3050 Laptop/GTX 1650 (4GB)
-	environment.sdfgi_enabled = true
+	# RTX 3050 Laptop/GTX 1650 (4GB)
+
+	# Configuring Global Illumination by Signed Distance Fields (SDFGI)
 	environment.sdfgi_cascades = 4
 	environment.sdfgi_use_occlusion = false
 	environment.sdfgi_y_scale = Environment.SDFGI_Y_SCALE_75_PERCENT
 
-	environment.ssao_enabled = true
+	# Disabling Indirect Screen Space Lighting (SSIL)
 	environment.ssil_enabled = false
 
+	# Configure and optimize Screen-Space Reflections (SSR)
 	environment.ssr_max_steps = 64
 	ProjectSettings.set_setting("rendering/reflections/screen_space_reflections/roughness_low_quality", true)
 	environment.ssr_fade_out = 1.0
 
-	MyLogger.info("[Render] SDFGI Optimized (VRAM <= 4GB) ", "ConfigRender.gd", 206, true)
+	# Optional: Save the change to the project.godot file
+	ProjectSettings.save() 
+
+	MyLogger.info("[Render] SDFGI Optimized (VRAM <= 4GB) ", "ConfigRender.gd", 235, true)
 
 
 static func _set_high_profile_env(environment: Environment) -> void :
 
 	# RTX 4060 / RX 6600 (8GB) - Balance
-	environment.sdfgi_enabled = true
+
+	# Configuring Global Illumination by Signed Distance Fields (SDFGI)
 	environment.sdfgi_cascades = 4
 	environment.sdfgi_use_occlusion = true
 	environment.sdfgi_y_scale = Environment.SDFGI_Y_SCALE_100_PERCENT
 
-	environment.ssao_enabled = true
-	environment.ssil_enabled = true
-
+	# Configure and optimize Screen-Space Reflections (SSR) applied noly if enabled
 	environment.ssr_max_steps = 128
 	ProjectSettings.set_setting("rendering/reflections/screen_space_reflections/roughness_low_quality", false)
 	environment.ssr_fade_out = 1.5
+	
+	# Optional: Save the change to the project.godot file
+	ProjectSettings.save() 
 
-	MyLogger.info("[Render] SDFGI High (VRAM 6GB-8GB) ", "ConfigRender.gd", 224, true)
+	MyLogger.info("[Render] SDFGI High (VRAM 6GB-8GB) ", "ConfigRender.gd", 255, true)
 
 
 static func _set_ultra_profile_env(environment: Environment) -> void :
 	
 	# GTX 1080 Ti / RTX 3060 12GB / RTX 4070+ (10GB+)
-	environment.sdfgi_enabled = true
+	
+	# Configuring Global Illumination by Signed Distance Fields (SDFGI)
 	environment.sdfgi_cascades = 6
 	environment.sdfgi_use_occlusion = true
 	environment.sdfgi_y_scale = Environment.SDFGI_Y_SCALE_100_PERCENT
 
-	environment.ssao_enabled = true
-	environment.ssil_enabled = true
-
+	# Configure and optimize Screen-Space Reflections (SSR) applied noly if enabled
 	environment.ssr_max_steps = 256
 	ProjectSettings.set_setting("rendering/reflections/screen_space_reflections/roughness_low_quality", false)
 	environment.ssr_fade_out = 2.0
+		
+	# Optional: Save the change to the project.godot file
+	ProjectSettings.save() 
 
-	MyLogger.info("[Render] SDFGI Full (VRAM > 8GB) ", "ConfigRender.gd", 242, true)
+	MyLogger.info("[Render] SDFGI Full (VRAM > 8GB) ", "ConfigRender.gd", 275, true)

@@ -25,7 +25,7 @@ This enables you to dynamically change the rendering environment settings from a
 There are many ways to implement this feature within your game.
 
 
-=======================================================================================================
+========================================================================================
 
 
 Este script se debe asociar obligatoriamente al nodo WorldEnvironment de cada una de las escena que tengamos en el videojuego y lleva a cabo un proceso de chequear la VRAM y el tipo de tarjeta gráfica y en función de estos datos configura una serie de parametros tanto del ViewPort como del atributo environment ajustando a cuatro perfiles LOW, MEDIUM, HIGH, ULTRA

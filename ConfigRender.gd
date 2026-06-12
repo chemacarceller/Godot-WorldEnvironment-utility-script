@@ -5,8 +5,63 @@ class_name ConfigRender
 # We define an Enum to have control of the available profiles
 enum Profile { LOW, MEDIUM, HIGH, ULTRA }
 
+## Method to apply the ViewPort configuration upon the graphic card
+# It is used in the script that links to WorldEnvironment
+# but you can also call it from the loading screen and leave it already configured.
+static func apply_default_viewport_settings(vp : Viewport) -> void :
+
+	# -------------------------------------------------------------------------
+	# BLOCK A: VIEWPORT AND GLOBAL DETECTION (Controlled within gpu_data)
+	# -------------------------------------------------------------------------
+
+	# In GameInstance we must have a structure like this:
+
+	# Unified Data Structure for Hardware and Video Status
+	# var gpu_data : Dictionary = {
+	#	 "vp_detectada": false,         # Checks if the Viewport/Hardware has already been processed
+	#	 "vram": 512.0 / 1024.0,        # Secure default value in Gigabytes
+	#	 "type": 0                      # Device Type (Dedicated, Integrated, etc.)
+	# }
+
+	# We check if the Viewport has already been configured in the unified dictionary
+	if not vp: return
+
+	if not GameInstance.gpu_data["vp_detectada"] :
+
+		# We save the hardware data directly in the structure
+		# VRAM is saved in GB measure
+		GameInstance.gpu_data["vram"] = _get_vram_real_mb() / 1024.0
+		GameInstance.gpu_data["type"] = RenderingServer.get_video_adapter_type()
+		
+		# Use this to avoid crashes if the dictionary is incomplete
+		var vram: float = float(GameInstance.gpu_data.get("vram", 0.0))
+		var type: int = int(GameInstance.gpu_data.get("type", RenderingDevice.DEVICE_TYPE_OTHER))
+	
+		# If the card is integrated or has less than 2.5 GB
+		if (type == RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU or vram <= 2.5) :
+			ConfigRender.apply_graphics_profile(ConfigRender.Profile.LOW, vp, null)
+
+		# If the card is dedicated with less than 4.5 GB
+		elif (type != RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU and vram <= 4.5) :
+			ConfigRender.apply_graphics_profile(ConfigRender.Profile.MEDIUM, vp, null)
+
+		# if the card is dedicated with less than 8.5 GB
+		elif (type != RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU and vram <= 8.5) :
+			ConfigRender.apply_graphics_profile(ConfigRender.Profile.HIGH, vp, null)
+
+		# if the card is dedicated with more than 8.5 GB
+		else :
+			ConfigRender.apply_graphics_profile(ConfigRender.Profile.ULTRA, vp, null)
+		
+		# We mark the Viewport as initialized directly in the structure
+		GameInstance.gpu_data["vp_detectada"] = true
+
+
+
 ## Main method to apply a complete graphic profile
-static func apply_graphics_profile(profile: Profile, vp: Viewport, environment: Environment) -> void:
+# It is used by the methods that configure each profile by default, both for the Viewport and the Environment
+# but it can also be called from any other part of the project, for example to change the graphics profile via keypress
+static func apply_graphics_profile(profile: Profile, vp: Viewport, environment: Environment) -> void :
 
 	# Settings that apply to all profiles when passing the ViewPort
 	if vp : 
@@ -72,8 +127,8 @@ static func apply_graphics_profile(profile: Profile, vp: Viewport, environment: 
 static func _set_low_profile_vp(vp: Viewport) -> void :
 
 	# Define the scaling and filtering algorithm that is applied to the 3D resolution when rendering at a size smaller or larger than the game window.
-	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
 	vp.scaling_3d_scale = 0.70
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
 	vp.fsr_sharpness = 0.3
 
 	# Controls the level of Multiple Sampling Anti-Aliasing (MSAA) applied exclusively to the 3D environment
@@ -99,14 +154,14 @@ static func _set_low_profile_vp(vp: Viewport) -> void :
 	# Optional: Save the change to the project.godot file
 	ProjectSettings.save() 
 
-	MyLogger.info("[ViewPort] Integrated or low VRAM ", "ConfigRender.gd", 102 , true)
+	MyLogger.info("[ViewPort] Integrated or low VRAM ", "ConfigRender.gd", 157 , true)
 
 
 static func _set_medium_profile_vp(vp: Viewport) -> void :
 
 	# Scaling configuration...
-	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
 	vp.scaling_3d_scale = 0.85
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
 	vp.fsr_sharpness = 0.15
 
 	vp.msaa_3d = Viewport.MSAA_2X
@@ -134,7 +189,7 @@ static func _set_medium_profile_vp(vp: Viewport) -> void :
 	# Optional: Save the change to the project.godot file
 	ProjectSettings.save()
 
-	MyLogger.info("[ViewPort] Medium (VRAM <= 4GB) ", "ConfigRender.gd", 137, true)
+	MyLogger.info("[ViewPort] Medium (VRAM <= 4GB) ", "ConfigRender.gd", 192, true)
 
 
 static func _set_high_profile_vp(vp: Viewport) -> void :
@@ -163,7 +218,7 @@ static func _set_high_profile_vp(vp: Viewport) -> void :
 	# Optional: Save the change to the project.godot file
 	ProjectSettings.save()
 
-	MyLogger.info("[ViewPort] High (VRAM 6GB-8GB) ", "ConfigRender.gd", 166, true)
+	MyLogger.info("[ViewPort] High (VRAM 6GB-8GB) ", "ConfigRender.gd", 221, true)
 
 
 static func _set_ultra_profile_vp(vp: Viewport) -> void :
@@ -191,7 +246,7 @@ static func _set_ultra_profile_vp(vp: Viewport) -> void :
 	# Optional: Save the change to the project.godot file
 	ProjectSettings.save() 
 	
-	MyLogger.info("[ViewPort] Full (VRAM > 8GB) ", "ConfigRender.gd", 194, true)
+	MyLogger.info("[ViewPort] Full (VRAM > 8GB) ", "ConfigRender.gd", 249, true)
 
 
 
@@ -209,7 +264,7 @@ static func _set_low_profile_env(environment: Environment) -> void :
 	# Disabling Screen-Space Reflections (SSR)
 	environment.ssr_enabled = false
 
-	MyLogger.info("[Render] Integrated or low VRAM. SDFGI: OFF ", "ConfigRender.gd", 212, true)
+	MyLogger.info("[Render] Integrated or low VRAM. SDFGI: OFF ", "ConfigRender.gd", 267, true)
 
 
 static func _set_medium_profile_env(environment: Environment) -> void :
@@ -232,7 +287,7 @@ static func _set_medium_profile_env(environment: Environment) -> void :
 	# Optional: Save the change to the project.godot file
 	ProjectSettings.save() 
 
-	MyLogger.info("[Render] SDFGI Optimized (VRAM <= 4GB) ", "ConfigRender.gd", 235, true)
+	MyLogger.info("[Render] SDFGI Optimized (VRAM <= 4GB) ", "ConfigRender.gd", 290, true)
 
 
 static func _set_high_profile_env(environment: Environment) -> void :
@@ -252,7 +307,7 @@ static func _set_high_profile_env(environment: Environment) -> void :
 	# Optional: Save the change to the project.godot file
 	ProjectSettings.save() 
 
-	MyLogger.info("[Render] SDFGI High (VRAM 6GB-8GB) ", "ConfigRender.gd", 255, true)
+	MyLogger.info("[Render] SDFGI High (VRAM 6GB-8GB) ", "ConfigRender.gd", 310, true)
 
 
 static func _set_ultra_profile_env(environment: Environment) -> void :
@@ -272,4 +327,59 @@ static func _set_ultra_profile_env(environment: Environment) -> void :
 	# Optional: Save the change to the project.godot file
 	ProjectSettings.save() 
 
-	MyLogger.info("[Render] SDFGI Full (VRAM > 8GB) ", "ConfigRender.gd", 275, true)
+	MyLogger.info("[Render] SDFGI Full (VRAM > 8GB) ", "ConfigRender.gd", 330, true)
+
+
+
+static func _get_vram_real_mb() -> float :
+
+	var os_name = OS.get_name()
+	var output = []
+
+	if os_name == "Windows" :
+
+		# Runs PowerShell synchronously to detect which graphics card has the most memory
+		OS.execute("powershell", [ "-Command", "(Get-ItemProperty -Path 'HKLM:/SYSTEM/ControlSet001/Control/Class/{4d36e968-e325-11ce-bfc1-08002be10318}/*' -ErrorAction SilentlyContinue | Where-Object { $_.'HardwareInformation.qwMemorySize' } | Sort-Object -Property 'HardwareInformation.qwMemorySize' -Descending | Select-Object -First 1).'HardwareInformation.qwMemorySize'" ], output)
+
+		# Output is an array, the data comes in position 0
+		if output.size() > 0 :
+			if output[0].strip_edges().is_valid_int() :
+				return output[0].strip_edges().to_int() / 1024.0 / 1024.0
+
+	elif os_name == "Linux" :
+
+		# 1. Try via nvidia-smi
+		OS.execute("nvidia-smi", ["--query-gpu=memory.total", "--format=csv,noheader,nounits"], output)
+
+		if output.size() > 0 :
+			if output[0].strip_edges().is_valid_int() :
+				return output[0].strip_edges().to_int()
+
+		# CLEANUP: Empty the array in case nvidia-smi left error text,
+		# avoiding dragging junk if you use 'output' further down in the script.
+		output.clear()
+
+		# 2. Try via sysfs (We look for the one with the most VRAM to avoid integrated)
+		var max_vram_found = 0.0
+
+		for card_index in ["card0", "card1", "card2"] :
+
+			var vram_path = "/sys/class/drm/" + card_index + "/device/mem_info_vram_total"
+
+			if FileAccess.file_exists(vram_path) :
+
+				var file = FileAccess.open(vram_path, FileAccess.READ)
+
+				if file :
+
+					var bytes_text = file.get_as_text().strip_edges()
+					file.close()
+
+					if bytes_text.is_valid_int() :
+						var vram_mb = bytes_text.to_int() / 1024.0 / 1024.0
+						if vram_mb > max_vram_found : max_vram_found = vram_mb
+
+		if max_vram_found > 0.0 : return max_vram_found
+
+	# Default if all else fails or the platform is not supported (macOS, Android, Web, etc.)
+	return 512.0

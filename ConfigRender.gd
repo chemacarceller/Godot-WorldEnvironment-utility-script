@@ -3,7 +3,7 @@ extends RefCounted
 class_name ConfigRender
 
 # We define an Enum to have control of the available profiles
-enum Profile { LOW, MEDIUM, HIGH, ULTRA }
+enum Profile { LOW, MEDIUM, HIGH, ULTRA, DEFAULT }
 
 ## Method to apply the ViewPort configuration upon the graphic card
 # It is used in the script that links to WorldEnvironment
@@ -18,7 +18,7 @@ static func apply_default_viewport_settings(vp : Viewport) -> void :
 
 	# Unified Data Structure for Hardware and Video Status
 	# var gpu_data : Dictionary = {
-	#	 "vp_detectada": false,         # Checks if the Viewport/Hardware has already been processed
+	#	 "vp_detected": false,         # Checks if the Viewport/Hardware has already been processed
 	#	 "vram": 512.0 / 1024.0,        # Secure default value in Gigabytes
 	#	 "type": 0                      # Device Type (Dedicated, Integrated, etc.)
 	# }
@@ -26,7 +26,8 @@ static func apply_default_viewport_settings(vp : Viewport) -> void :
 	# We check if the Viewport has already been configured in the unified dictionary
 	if not vp: return
 
-	if not GameInstance.gpu_data["vp_detectada"] :
+	# If the ViewPort has not been previously configured, it is done now; otherwise, the configuration is omitted.
+	if "gpu_data" in GameInstance and "vp_detected" in GameInstance.gpu_data and not GameInstance.gpu_data["vp_detected"] :
 
 		# We save the hardware data directly in the structure
 		# VRAM is saved in GB measure
@@ -54,7 +55,7 @@ static func apply_default_viewport_settings(vp : Viewport) -> void :
 			ConfigRender.apply_graphics_profile(ConfigRender.Profile.ULTRA, vp, null)
 		
 		# We mark the Viewport as initialized directly in the structure
-		GameInstance.gpu_data["vp_detectada"] = true
+		GameInstance.gpu_data["vp_detected"] = true
 
 
 
@@ -152,7 +153,7 @@ static func _set_low_profile_vp(vp: Viewport) -> void :
 	ProjectSettings.set_setting("rendering/textures/default_filters/anisotropic_filtering_level", 4)
 	
 	# Optional: Save the change to the project.godot file
-	ProjectSettings.save() 
+	# ProjectSettings.save() 
 
 	MyLogger.info("[ViewPort] Integrated or low VRAM ", "ConfigRender.gd", 157 , true)
 
@@ -187,7 +188,7 @@ static func _set_medium_profile_vp(vp: Viewport) -> void :
 	ProjectSettings.set_setting("rendering/textures/default_filters/anisotropic_filtering_level", 8)
 	
 	# Optional: Save the change to the project.godot file
-	ProjectSettings.save()
+	# ProjectSettings.save()
 
 	MyLogger.info("[ViewPort] Medium (VRAM <= 4GB) ", "ConfigRender.gd", 192, true)
 
@@ -216,7 +217,7 @@ static func _set_high_profile_vp(vp: Viewport) -> void :
 	ProjectSettings.set_setting("rendering/textures/default_filters/anisotropic_filtering_level", 16)
 	
 	# Optional: Save the change to the project.godot file
-	ProjectSettings.save()
+	# ProjectSettings.save()
 
 	MyLogger.info("[ViewPort] High (VRAM 6GB-8GB) ", "ConfigRender.gd", 221, true)
 
@@ -244,7 +245,7 @@ static func _set_ultra_profile_vp(vp: Viewport) -> void :
 	ProjectSettings.set_setting("rendering/textures/default_filters/anisotropic_filtering_level", 16)
 	
 	# Optional: Save the change to the project.godot file
-	ProjectSettings.save() 
+	# ProjectSettings.save() 
 	
 	MyLogger.info("[ViewPort] Full (VRAM > 8GB) ", "ConfigRender.gd", 249, true)
 
@@ -285,7 +286,7 @@ static func _set_medium_profile_env(environment: Environment) -> void :
 	environment.ssr_fade_out = 1.0
 
 	# Optional: Save the change to the project.godot file
-	ProjectSettings.save() 
+	# ProjectSettings.save() 
 
 	MyLogger.info("[Render] SDFGI Optimized (VRAM <= 4GB) ", "ConfigRender.gd", 290, true)
 
@@ -305,7 +306,7 @@ static func _set_high_profile_env(environment: Environment) -> void :
 	environment.ssr_fade_out = 1.5
 	
 	# Optional: Save the change to the project.godot file
-	ProjectSettings.save() 
+	# ProjectSettings.save() 
 
 	MyLogger.info("[Render] SDFGI High (VRAM 6GB-8GB) ", "ConfigRender.gd", 310, true)
 
@@ -325,7 +326,7 @@ static func _set_ultra_profile_env(environment: Environment) -> void :
 	environment.ssr_fade_out = 2.0
 		
 	# Optional: Save the change to the project.godot file
-	ProjectSettings.save() 
+	# ProjectSettings.save() 
 
 	MyLogger.info("[Render] SDFGI Full (VRAM > 8GB) ", "ConfigRender.gd", 330, true)
 

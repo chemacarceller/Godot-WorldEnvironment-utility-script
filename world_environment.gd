@@ -10,9 +10,11 @@ extends WorldEnvironment
 # If a graphics profile is set manually, it will take precedence over the default profile defined by the graphics card.
 @export var controlVar: String = ""
 
-func _init() -> void : pass
+func _enter_tree() -> void : MyLogger.info(name + " Instantiated ... " , 'world_environment.gd',13,true)
 
 func _ready() -> void :
+
+	MyLogger.info(name + " Ready ... " , 'world_environment.gd',17,true)
 
 	# -------------------------------------------------------------------------
 	# BLOCK A: VIEWPORT AND GLOBAL DETECTION (Controlled within gpu_data)
